@@ -77,19 +77,14 @@ async def health_check():
     }
 
 # --- WebSocket Channel Endpoints ---
-
 @app.websocket("/ws/live-traffic")
 async def ws_live_traffic(websocket: WebSocket):
-    """Real-time live traffic stream endpoint. Throttled internally to 30 FPS."""
     await ws_manager.connect(websocket, "live-traffic")
+
     try:
         while True:
-            # Keep connection open and receive packets/pings if client sends them
-            await websocket.receive_text()
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
-        ws_manager.disconnect(websocket, "live-traffic")
-    except Exception as e:
-        logger.error(f"Error on live-traffic WebSocket: {e}")
         ws_manager.disconnect(websocket, "live-traffic")
 
 
@@ -99,7 +94,7 @@ async def ws_statistics(websocket: WebSocket):
     await ws_manager.connect(websocket, "statistics")
     try:
         while True:
-            await websocket.receive_text()
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket, "statistics")
     except Exception as e:
@@ -113,7 +108,7 @@ async def ws_alerts(websocket: WebSocket):
     await ws_manager.connect(websocket, "alerts")
     try:
         while True:
-            await websocket.receive_text()
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket, "alerts")
     except Exception as e:
