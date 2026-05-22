@@ -18,32 +18,29 @@ global_coordinator.websocket_manager = ws_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Manages application startup and shutdown lifecycle events.
-    Bootstraps DB models, starts batch writers, and safely disposes sniffers on exit.
-    """
     logger.info(f"Starting {settings.PROJECT_NAME} backend...")
-    
-    # 1. Initialize DB tables
-    await init_db()
-    
-    # 2. Cleanup stale database sessions from previous runs
-    await global_coordinator.cleanup_stale_sessions()
-    
-    # 3. Start high-throughput database batch writer
-    global_db_writer.start()
-    
-    yield
-    
-    logger.info("Shutting down backend...")
-    # 1. Terminate all active sniffing sessions
-    global_capture_engine.stop_all_sessions()
-    
-    # 2. Stop and flush DB batch writer
-    await global_db_writer.stop()
-    
-    logger.info("Backend cleanup complete. Shutdown successful.")
 
+    await init_db()
+
+    await global_coordinator.cleanup_stale_sessions()
+
+    global_db_writer.start()
+
+    yield
+
+    logger.info("Shutting down backend...")
+
+    # Stop all capture threads
+    global_capture_engine.stop_all_sessions()
+
+    # Flush DB queue
+    await global_db_writer.stop()
+
+    # Shutdown DNS resolver thread pools
+    for session in global_capture_engine._active_sessions.values():
+        session._parser.resolver.shutdown()
+
+    logger.info("Backend cleanup complete. Shutdown successful.")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

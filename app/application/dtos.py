@@ -8,7 +8,7 @@ class CaptureStartRequest(BaseModel):
 class InterfaceDTO(BaseModel):
     name: str
     description: Optional[str] = None
-    ip_addresses: List[str] = []
+    ip_addresses: List[str] = Field(default_factory=list)
     mac_address: Optional[str] = None
     is_loopback: bool
     is_up: bool

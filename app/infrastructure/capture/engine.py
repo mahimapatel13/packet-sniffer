@@ -60,41 +60,42 @@ class CaptureSessionThread:
         try:
             last_sent = 0
 
+            resolved_iface = resolve_interface(self.interface)
+
+            logger.info(
+                f"Sniffing on resolved interface: {resolved_iface}"
+            )
+
             def process_packet(packet):
                 nonlocal last_sent
 
                 if self._stop_event.is_set():
                     return
 
-                now = time.time()
-
-                # max 30 fps
-                if now - last_sent < 1/30:
-                    return
-
-                last_sent = now
-
                 record = self._parser.parse(packet)
 
-                if record:
-                    self._packet_callback(record)
+                if record is None:
+                    return
 
-            # Resolve the interface before starting the sniffing loop
-            resolved_iface = resolve_interface(self.interface)
-            logger.info(f"Sniffing on resolved interface: {resolved_iface}")
+                now = time.time()
 
-            # Standard sniff loop
-            # stop_filter receives each packet and returns True if sniffing should stop
+                # throttle websocket traffic only
+                if now - last_sent >= (1 / 30):
+                    last_sent = now
+
+                self._packet_callback(record)
+
             sniff(
                 iface=resolved_iface,
                 prn=process_packet,
                 store=False,
-                stop_filter=lambda p: self._stop_event.is_set()
+                stop_filter=lambda _: self._stop_event.is_set()
             )
+
         except Exception as e:
-            logger.error(f"Error in sniffing session {self.session_id} on {self.interface}: {e}")
-
-
+            logger.error(
+                f"Error in sniffing session {self.session_id}: {e}"
+            )
 class CaptureEngine:
     """
     Singleton-like manager for discoverable interfaces and active multi-session capture threads.
@@ -188,16 +189,12 @@ class CaptureEngine:
             return False
 
     def stop_all_sessions(self):
-        """
-        Stops all active sniffing threads (e.g. on server shutdown).
-        """
         with self._lock:
             sessions_to_stop = list(self._active_sessions.values())
             self._active_sessions.clear()
-            
+
         for session in sessions_to_stop:
             session.stop()
-
     def get_active_sessions(self) -> List[dict]:
         """
         Returns info of active sessions.

@@ -46,7 +46,7 @@ class Session(BaseModel):
 class InterfaceInfo(BaseModel):
     name: str
     description: Optional[str] = None
-    ip_addresses: list[str] = []
+    ip_addresses: list[str] = Field(default_factory=list)
     mac_address: Optional[str] = None
-    is_loopback: bool = False
-    is_up: bool = True
+    is_loopback: bool=False
+    is_up: bool=True

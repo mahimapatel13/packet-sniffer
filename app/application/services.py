@@ -25,34 +25,24 @@ class TrafficCoordinator:
         self._active_db_session_id: Optional[int] = None
 
     def handle_packet(self, record: TrafficRecord):
+        """
+        Callback executed by capture threads for every parsed packet.
+        """
+
         self.stats_engine.update(record)
+
         self.ids_engine.detect(record)
+
         self.db_writer.enqueue(record)
 
         if self.websocket_manager:
             loop = self.db_writer._loop
+
             if loop and loop.is_running():
                 asyncio.run_coroutine_threadsafe(
                     self.websocket_manager.broadcast_live_traffic(record),
                     loop
-                )
-            """Callback invoked by background capture thread per sniffed packet."""
-            # 1. Update stats counter
-            self.stats_engine.update(record)
-
-            # 2. Feed to threat detector
-            self.ids_engine.detect(record)
-
-            # 3. Queue for high throughput database insert
-            self.db_writer.enqueue(record)
-
-            # 4. Broadcast live traffic via WebSockets (if wired up)
-            if self.websocket_manager and self.db_writer._loop:
-                asyncio.run_coroutine_threadsafe(
-                    self.websocket_manager.broadcast_live_traffic(record),
-                    self.db_writer._loop
-                )
-                
+                )         
     def handle_alert(self, alert: Alert):
         """Callback from IDS when threat rules trigger."""
         loop = self.db_writer._loop
