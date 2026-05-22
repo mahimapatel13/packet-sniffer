@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 from core.logging import logger, setup_logging
 from infrastructure.database.session import init_db
-from application.services import global_coordinator, global_db_writer, global_capture_engine
+from application.services import global_coordinator, global_db_writer, global_capture_engine, global_stats_engine
 from interfaces.websockets.manager import WebSocketConnectionManager
 from interfaces.api.routes import capture, traffic, metrics
 
@@ -88,19 +88,21 @@ async def ws_live_traffic(websocket: WebSocket):
         ws_manager.disconnect(websocket, "live-traffic")
 
 
+
 @app.websocket("/ws/statistics")
 async def ws_statistics(websocket: WebSocket):
-    """Real-time metrics stream endpoint, broadcasting statistics summaries once per second."""
-    await ws_manager.connect(websocket, "statistics")
+    await ws_manager.connect(websocket,"statistics")
+
     try:
         while True:
-            await asyncio.sleep(1)
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket, "statistics")
-    except Exception as e:
-        logger.error(f"Error on statistics WebSocket: {e}")
-        ws_manager.disconnect(websocket, "statistics")
+            stats = global_stats_engine.get_stats()
 
+            await websocket.send_json(stats)
+
+            await asyncio.sleep(1)
+
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket,"statistics")
 
 @app.websocket("/ws/alerts")
 async def ws_alerts(websocket: WebSocket):

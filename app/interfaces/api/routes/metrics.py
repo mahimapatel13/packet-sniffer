@@ -97,3 +97,37 @@ async def get_top_domains(limit: int = Query(default=5, ge=1, le=50)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to aggregate top requested domains: {str(e)}"
         )
+        
+@router.get("/graph")
+async def get_graph():
+    stats = global_stats_engine.get_stats()
+
+    nodes = [
+        {
+            "id": "host",
+            "label": "Host",
+            "kind": "host"
+        }
+    ]
+
+    edges = []
+
+    for src in stats["top_source_ips"]:
+        ip = src["ip"]
+
+        nodes.append({
+            "id": ip,
+            "label": ip,
+            "kind": "source"
+        })
+
+        edges.append({
+            "source": ip,
+            "target": "host",
+            "weight": src["count"]
+        })
+
+    return {
+        "nodes": nodes,
+        "edges": edges
+    }

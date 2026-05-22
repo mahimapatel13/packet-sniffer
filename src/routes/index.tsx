@@ -144,7 +144,9 @@ function Dashboard() {
         </section>
 
         <section className="mt-12">
-          {graphQuery.data && <NetworkGraph data={graphQuery.data} />}
+          {graphQuery.data && <NetworkGraph
+            data={graphQuery.data ?? { nodes: [], edges: [] }}
+          />}
         </section>
 
         <section className="mt-12">

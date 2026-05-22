@@ -161,10 +161,63 @@ export type GraphEdge = { source: string; target: string; weight: number };
 export type GraphData = { nodes: GraphNode[]; edges: GraphEdge[] };
 
 export async function getGraph(): Promise<GraphData> {
-  // This might need real implementation based on top-ips and top-domains
-  // For now, returning empty to avoid breakage but signaled as todo
-  return { nodes: [], edges: [] };
+  const stats = await getStatistics();
+
+  const nodes: GraphNode[] = [
+    {
+      id: "host",
+      label: "Host",
+      kind: "host",
+      protocol: "",
+      packets: 0,
+      bandwidthMbps: 0,
+    },
+  ];
+
+  const edges: GraphEdge[] = [];
+
+  // Source IPs
+  stats.top_source_ips.forEach((item) => {
+    nodes.push({
+      id: `src-${item.ip}`,
+      label: item.ip,
+      kind: "source",
+      protocol: "TCP",
+      packets: item.count,
+      bandwidthMbps: item.count / 100,
+    });
+
+    edges.push({
+      source: `src-${item.ip}`,
+      target: "host",
+      weight: item.count,
+    });
+  });
+
+  // Destination domains
+  stats.top_domains.forEach((item) => {
+    nodes.push({
+      id: `dom-${item.domain}`,
+      label: item.domain,
+      kind: "domain",
+      protocol: "DNS",
+      packets: item.count,
+      bandwidthMbps: item.count / 100,
+    });
+
+    edges.push({
+      source: "host",
+      target: `dom-${item.domain}`,
+      weight: item.count,
+    });
+  });
+
+  return {
+    nodes,
+    edges,
+  };
 }
+
 
 export async function getLivePackets(): Promise<Packet[]> {
   const records = await getLiveTraffic(20);

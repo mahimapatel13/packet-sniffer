@@ -1,6 +1,7 @@
 import threading
 import socket
 import uuid
+import time
 from typing import Dict, List, Callable, Optional
 from scapy.all import conf, sniff
 from domain.entities import InterfaceInfo, TrafficRecord
@@ -57,10 +58,24 @@ class CaptureSessionThread:
 
     def _run(self):
         try:
+            last_sent = 0
+
             def process_packet(packet):
+                nonlocal last_sent
+
                 if self._stop_event.is_set():
                     return
+
+                now = time.time()
+
+                # max 30 fps
+                if now - last_sent < 1/30:
+                    return
+
+                last_sent = now
+
                 record = self._parser.parse(packet)
+
                 if record:
                     self._packet_callback(record)
 
