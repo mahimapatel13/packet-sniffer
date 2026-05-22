@@ -1,0 +1,99 @@
+from fastapi import APIRouter, HTTPException, Query, status
+from typing import List, Dict, Any
+from application.dtos import StatsSummaryDTO, AlertDTO, ProtocolStatItem, TopIPItem, TopDomainItem
+from application.services import global_coordinator
+from infrastructure.services.stats import global_stats_engine
+from core.logging import logger
+
+router = APIRouter(tags=["Metrics & Analysis"])
+
+@router.get("/statistics", response_model=StatsSummaryDTO)
+async def get_statistics():
+    """
+    Returns real-time aggregated traffic statistics, including packet counts,
+    active data rate (bytes/sec), packets/sec, and active connection tracking.
+    """
+    try:
+        stats = global_stats_engine.get_stats()
+        return stats
+    except Exception as e:
+        logger.error(f"Error fetching stats summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Stats calculation error: {str(e)}"
+        )
+
+@router.get("/alerts", response_model=List[AlertDTO])
+async def get_alerts(limit: int = Query(default=100, ge=1, le=500)):
+    """
+    Returns historical threat detection logs triggered by the IDS engine.
+    """
+    try:
+        alerts = await global_coordinator.get_alerts_history(limit)
+        return [
+            AlertDTO(
+                id=a.id,
+                timestamp=a.timestamp,
+                severity=a.severity,
+                message=a.message,
+                source_ip=a.source_ip
+            )
+            for a in alerts
+        ]
+    except Exception as e:
+        logger.error(f"Error reading security alerts: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query database alerts: {str(e)}"
+        )
+
+@router.get("/protocols", response_model=Dict[str, ProtocolStatItem])
+async def get_protocols():
+    """
+    Returns distribution counts and percentage values per identified protocol layer.
+    """
+    try:
+        dist = global_stats_engine.get_protocol_distribution()
+        return {
+            proto: ProtocolStatItem(count=item["count"], percentage=item["percentage"])
+            for proto, item in dist.items()
+        }
+    except Exception as e:
+        logger.error(f"Error generating protocol distribution: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Protocol breakdown calculation failed: {str(e)}"
+        )
+
+@router.get("/top-ips")
+async def get_top_ips(limit: int = Query(default=5, ge=1, le=50)):
+    """
+    Returns the most active Source and Destination IP addresses.
+    """
+    try:
+        data = global_stats_engine.get_top_ips(limit)
+        return {
+            "sources": [TopIPItem(ip=item["ip"], count=item["count"]) for item in data["sources"]],
+            "destinations": [TopIPItem(ip=item["ip"], count=item["count"]) for item in data["destinations"]]
+        }
+    except Exception as e:
+        logger.error(f"Error compiling top IPs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to resolve top traffic sources: {str(e)}"
+        )
+
+@router.get("/top-domains", response_model=List[TopDomainItem])
+async def get_top_domains(limit: int = Query(default=5, ge=1, le=50)):
+    """
+    Returns the most frequently requested destination domains, resolved dynamically.
+    """
+    try:
+        data = global_stats_engine.get_top_domains(limit)
+        return [TopDomainItem(domain=item["domain"], count=item["count"]) for item in data]
+    except Exception as e:
+        logger.error(f"Error resolving top domains: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to aggregate top requested domains: {str(e)}"
+        )
