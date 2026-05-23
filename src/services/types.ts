@@ -2,6 +2,17 @@ export interface CaptureStartRequest {
   interface: string;
 }
 
+export interface GeoPointDTO {
+  ip: string;
+  country_code: string;
+  country_name: string;
+  city: string | null;
+  latitude: number;
+  longitude: number;
+  count: number;
+  direction: 'source' | 'destination';
+}
+
 export interface InterfaceDTO {
   name: string;
   description: string | null;
@@ -76,6 +87,7 @@ export interface StatsSummaryDTO {
   top_domains: TopDomainItem[];
   active_connections_count: number;
   timestamp: string;
+  geo_points?: GeoPointDTO[];
 }
 
 export interface SystemHealthDTO {

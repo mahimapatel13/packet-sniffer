@@ -9,6 +9,8 @@ import { ProtocolList } from "@/components/dashboard/ProtocolList";
 import { AlertFeed } from "@/components/dashboard/AlertFeed";
 import { NetworkGraph } from "@/components/dashboard/NetworkGraph";
 import { PacketLogs } from "@/components/dashboard/PacketLogs";
+import { GlobeMap } from '@/components/dashboard/GlobeMap';
+import { GlobeStats } from '@/components/dashboard/GlobeStats';
 import {
   getStatistics,
   getProtocols,
@@ -16,10 +18,11 @@ import {
   getAlerts,
   getGraph,
   getLivePackets,
+  getGeoPoints,
   subscribeStatistics,
 } from "@/services/api";
 import { useEffect, useState } from "react";
-import { StatsSummaryDTO } from "@/services/types";
+import { StatsSummaryDTO, GeoPointDTO } from "@/services/types";
 
 export const Route = createFileRoute("/")({
   component: Dashboard,
@@ -42,9 +45,15 @@ function Dashboard() {
   const alertsQuery = useQuery({ queryKey: ["alerts"], queryFn: () => getAlerts() });
   const graphQuery = useQuery({ queryKey: ["graph"], queryFn: getGraph });
   const packetsQuery = useQuery({ queryKey: ["packets"], queryFn: getLivePackets });
+  const geoQuery = useQuery({
+    queryKey: ['geo-points'],
+    queryFn: () => getGeoPoints(100),
+    refetchInterval: 10_000,
+  });
 
   const [liveStats, setLiveStats] = useState<StatsSummaryDTO | null>(null);
   const [series, setSeries] = useState<{ t: string; v: number }[]>([]);
+  const [liveGeoPoints, setLiveGeoPoints] = useState<GeoPointDTO[]>([]);
 
   useEffect(() => {
     if (statsQuery.data) {
@@ -53,8 +62,17 @@ function Dashboard() {
   }, [statsQuery.data]);
 
   useEffect(() => {
+    if (geoQuery.data) {
+      setLiveGeoPoints(geoQuery.data);
+    }
+  }, [geoQuery.data]);
+
+  useEffect(() => {
     const off = subscribeStatistics((newStats) => {
       setLiveStats(newStats);
+      if (newStats.geo_points && newStats.geo_points.length > 0) {
+        setLiveGeoPoints(newStats.geo_points);
+      }
       setSeries((prev) => {
         const next = [...prev, { t: new Date(newStats.timestamp).toLocaleTimeString(), v: newStats.packets_per_second }];
         return next.slice(-30);
@@ -141,6 +159,28 @@ function Dashboard() {
               sources={sources}
             />
           </div>
+        </section>
+
+        <section className="mt-8">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1, ease: 'easeOut' }}
+          >
+            <div className="mb-4">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                Geo intelligence
+              </span>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">
+                Traffic origins
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Live geo-resolved source and destination IPs
+              </p>
+            </div>
+            <GlobeMap points={liveGeoPoints} />
+            <GlobeStats points={liveGeoPoints} />
+          </motion.div>
         </section>
 
         <section className="mt-12">

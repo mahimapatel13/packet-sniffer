@@ -53,7 +53,7 @@ class WebSocketConnectionManager:
             self.alerts_clients.discard(websocket)
             logger.info(f"Client disconnected from /ws/alerts. Total: {len(self.alerts_clients)}")
 
-    def broadcast_live_traffic(self, record: TrafficRecord):
+    async def broadcast_live_traffic(self, record: TrafficRecord):
         """
         Broadcasts parsed packets to `/ws/live-traffic` clients.
         Uses rate-limiting to avoid degrading client UI performance.
@@ -62,10 +62,9 @@ class WebSocketConnectionManager:
             return
 
         now = time.time()
-        # Throttling check
         if now - self._last_live_broadcast < self._live_broadcast_interval:
             return
-        
+
         self._last_live_broadcast = now
 
         payload = {
@@ -81,13 +80,8 @@ class WebSocketConnectionManager:
             "mac_dst": record.mac_dst,
             "domain": record.domain
         }
-        
-        # Schedule the task thread-safely on the active event loop
-        if self._loop and self._loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                self._safe_broadcast(self.live_traffic_clients, payload),
-                self._loop
-            )
+
+        await self._safe_broadcast(self.live_traffic_clients, payload)
 
     async def broadcast_alert(self, alert: Alert):
         """Broadcasts security IDS alerts instantly to `/ws/alerts`"""
@@ -104,18 +98,15 @@ class WebSocketConnectionManager:
         await self._safe_broadcast(self.alerts_clients, payload)
 
     async def _safe_broadcast(self, clients: Set[WebSocket], message: dict):
-        """Sends JSON messages to a set of sockets, discarding dead sockets gracefully."""
         if not clients:
             return
-            
         json_msg = json.dumps(message)
         disconnected = []
-        for client in clients:
+        for client in list(clients):  # snapshot to avoid mutation during iteration
             try:
                 await client.send_text(json_msg)
             except Exception:
                 disconnected.append(client)
-                
         for client in disconnected:
             clients.discard(client)
 
@@ -126,14 +117,18 @@ class WebSocketConnectionManager:
             logger.info("Background WebSocket statistics broadcaster loop started.")
 
     async def _stats_broadcaster(self):
-        """Broadcasts real-time statistics aggregated by the StatsEngine once per second."""
         try:
-            while self.statistics_clients:
+            while True:
+                if not self.statistics_clients:
+                    break
                 stats = global_stats_engine.get_stats()
                 await self._safe_broadcast(self.statistics_clients, stats)
                 await asyncio.sleep(1.0)
         except asyncio.CancelledError:
             pass
         finally:
-            logger.info("WebSocket statistics broadcaster loop stopped.")
             self._stats_task = None
+            logger.info("WebSocket statistics broadcaster loop stopped.")
+            # If clients connected during shutdown window, restart
+            if self.statistics_clients:
+                self._start_stats_loop_if_needed()

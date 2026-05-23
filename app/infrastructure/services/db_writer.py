@@ -86,13 +86,18 @@ class BatchDatabaseWriter:
                 await self._write_batch(batch)
 
     async def _write_batch(self, batch: List[TrafficRecord]):
-        try:
-            async with async_session_factory() as session:
-                repo = TrafficRepository(session)
-                await repo.save_batch(batch)
-        except Exception as e:
-            logger.error(f"Failed to bulk save {len(batch)} traffic records: {e}")
-
+        for attempt in range(3):
+            try:
+                async with async_session_factory() as session:
+                    repo = TrafficRepository(session)
+                    await repo.save_batch(batch)
+                return
+            except Exception as e:
+                logger.error(f"Failed to bulk save {len(batch)} traffic records (attempt {attempt+1}/3): {e}")
+                if attempt < 2:
+                    await asyncio.sleep(0.5 * (attempt + 1))
+        logger.error(f"Permanently dropping {len(batch)} records after 3 failed attempts.")
+        
     async def _flush_remaining(self):
         """Ensures any remaining records in the queue are persisted during shutdown."""
         if self._queue is None:

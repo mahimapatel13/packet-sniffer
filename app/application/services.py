@@ -1,6 +1,8 @@
 import asyncio
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+
+from scapy.config import conf
 from domain.entities import TrafficRecord, Alert, Session, InterfaceInfo
 from domain.interfaces import ITrafficRepository, IAlertRepository, ISessionRepository
 from infrastructure.capture.engine import CaptureEngine
@@ -82,9 +84,89 @@ class TrafficCoordinator:
             logger.info("Stale database capture sessions cleaned successfully.")
         except Exception as e:
             logger.error(f"Failed to cleanup stale sessions: {e}")
+    
+    def list_interfaces(self) -> List[InterfaceInfo]:
+        interfaces: List[InterfaceInfo] = []
+        seen_names: set = set()
 
-    async def list_interfaces(self) -> List[InterfaceInfo]:
-        return self.capture_engine.list_interfaces()
+        # Primary: Scapy conf.ifaces
+        try:
+            for iface_key, iface in conf.ifaces.items():
+                name = iface.name
+                if name in seen_names:
+                    continue
+                seen_names.add(name)
+                description = getattr(iface, "description", None) or name
+                mac = getattr(iface, "mac", None)
+                ips = []
+                if getattr(iface, "ip", None):
+                    ips.append(str(iface.ip))
+                if hasattr(iface, "ips") and iface.ips:
+                    for family, ip_list in iface.ips.items():
+                        for ip in ip_list:
+                            ip_str = str(ip)
+                            if ip_str not in ips:
+                                ips.append(ip_str)
+                is_loopback = (
+                    "loop" in name.lower()
+                    or name.lower() == "lo"
+                    or any(isinstance(ip, str) and ip.startswith("127.") for ip in ips)
+                )
+                interfaces.append(InterfaceInfo(
+                    name=name,
+                    description=description,
+                    ip_addresses=ips,
+                    mac_address=mac,
+                    is_loopback=is_loopback,
+                    is_up=True
+                ))
+        except Exception as e:
+            logger.warning(f"Scapy iface enumeration failed: {e}")
+
+        # Fallback: psutil (always available since it's in requirements)
+        if not interfaces:
+            try:
+                import psutil
+                addrs = psutil.net_if_addrs()
+                stats = psutil.net_if_stats()
+                for name, addr_list in addrs.items():
+                    if name in seen_names:
+                        continue
+                    seen_names.add(name)
+                    ips = []
+                    mac = None
+                    import socket as _socket
+                    for addr in addr_list:
+                        if addr.family == _socket.AF_INET:
+                            ips.append(addr.address)
+                        elif addr.family == _socket.AF_INET6:
+                            ips.append(addr.address.split("%")[0])
+                        elif hasattr(_socket, "AF_PACKET") and addr.family == _socket.AF_PACKET:
+                            mac = addr.address
+                        elif addr.family == 23:  # AF_LINK on macOS/Windows
+                            mac = addr.address
+                    iface_stat = stats.get(name)
+                    is_up = iface_stat.isup if iface_stat else True
+                    is_loopback = (
+                        name.lower() == "lo"
+                        or "loop" in name.lower()
+                        or any(ip.startswith("127.") for ip in ips)
+                    )
+                    interfaces.append(InterfaceInfo(
+                        name=name,
+                        description=name,
+                        ip_addresses=ips,
+                        mac_address=mac,
+                        is_loopback=is_loopback,
+                        is_up=is_up
+                    ))
+            except Exception as e:
+                logger.error(f"psutil iface fallback also failed: {e}")
+
+        if not interfaces:
+            logger.error("No network interfaces detected by any method.")
+
+        return interfaces
 
     async def start_capture(self, interface: str) -> dict:
         """Starts capture sessions, saving session metadata to the database."""

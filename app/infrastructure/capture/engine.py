@@ -59,43 +59,28 @@ class CaptureSessionThread:
     def _run(self):
         try:
             last_sent = 0
-
             resolved_iface = resolve_interface(self.interface)
-
-            logger.info(
-                f"Sniffing on resolved interface: {resolved_iface}"
-            )
+            logger.info(f"Sniffing on resolved interface: {resolved_iface}")
 
             def process_packet(packet):
                 nonlocal last_sent
-
                 if self._stop_event.is_set():
                     return
-
                 record = self._parser.parse(packet)
-
                 if record is None:
                     return
-
-                now = time.time()
-
-                # throttle websocket traffic only
-                if now - last_sent >= (1 / 30):
-                    last_sent = now
-
                 self._packet_callback(record)
 
-            sniff(
-                iface=resolved_iface,
-                prn=process_packet,
-                store=False,
-                stop_filter=lambda _: self._stop_event.is_set()
-            )
-
+            while not self._stop_event.is_set():
+                sniff(
+                    iface=resolved_iface,
+                    prn=process_packet,
+                    store=False,
+                    stop_filter=lambda _: self._stop_event.is_set(),
+                    timeout=1,
+                )
         except Exception as e:
-            logger.error(
-                f"Error in sniffing session {self.session_id}: {e}"
-            )
+            logger.error(f"Error in sniffing session {self.session_id}: {e}")
 class CaptureEngine:
     """
     Singleton-like manager for discoverable interfaces and active multi-session capture threads.

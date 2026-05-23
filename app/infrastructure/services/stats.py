@@ -5,6 +5,7 @@ from collections import Counter, deque
 from typing import Dict, Any, List, Tuple
 from domain.entities import TrafficRecord
 from core.logging import logger
+from infrastructure.services.geo import geo_resolver, GeoLocation
 
 class StatisticsEngine:
     """
@@ -32,50 +33,50 @@ class StatisticsEngine:
 
         # Active Connections: (source_ip, source_port, dest_ip, dest_port, protocol) -> last_seen_timestamp
         self.active_connections: Dict[Tuple[str, int, str, int, str], float] = {}
+        
+        # Geo-IP tracking: ip -> GeoLocation (source and destination separately)
+        self.geo_sources: Dict[str, GeoLocation] = {}
+        self.geo_destinations: Dict[str, GeoLocation] = {}
 
     def update(self, record: TrafficRecord) -> None:
-        """
-        Updates internal metrics with a newly captured packet record.
-        Designed to be thread-safe for sniffer callback invocation.
-        """
         now = time.time()
         with self._lock:
             self.total_packets += 1
             self.total_bytes += record.packet_size
-
-            # Update protocols
             self.protocol_counts[record.protocol] += 1
-
-            # Update IP distribution
             self.source_ip_counts[record.source_ip] += 1
             self.dest_ip_counts[record.destination_ip] += 1
             if record.domain:
                 self.domain_counts[record.domain] += 1
-
-            # Push to sliding window for traffic rates
             self._packet_window.append((now, record.packet_size))
-
-            # Maintain active connection tracking
             if record.source_port is not None and record.destination_port is not None:
-                # Flow tuple (Src IP, Src Port, Dst IP, Dst Port, Protocol)
                 flow = (record.source_ip, record.source_port, record.destination_ip, record.destination_port, record.protocol)
                 self.active_connections[flow] = now
+            self._cleanup_window_and_connections(now)
+        
+        # Geo resolution — resolve() returns instantly from cache after first lookup
+        src_geo = geo_resolver.resolve(record.source_ip)
+        if src_geo:
+            self.geo_sources[record.source_ip] = src_geo
+
+        dst_geo = geo_resolver.resolve(record.destination_ip)
+        if dst_geo:
+            self.geo_destinations[record.destination_ip] = dst_geo
 
     def _cleanup_window_and_connections(self, now: float) -> None:
         """Cleans up expired sliding window records and inactive connections (older than 60s)."""
-        # 1. Clean window for rates
         boundary = now - self._window_size_sec
         while self._packet_window and self._packet_window[0][0] < boundary:
             self._packet_window.popleft()
-
-        # 2. Clean connections (inactive for more than 60 seconds)
         conn_expiry = now - 60.0
-        expired_flows = [flow for flow, last_seen in self.active_connections.items() if last_seen < conn_expiry]
+        expired_flows = [
+            flow for flow, last_seen in self.active_connections.items()
+            if last_seen < conn_expiry
+        ]
         for flow in expired_flows:
             self.active_connections.pop(flow, None)
 
     def get_packets_per_second(self) -> float:
-        """Calculates current packets/sec using the sliding window."""
         now = time.time()
         with self._lock:
             self._cleanup_window_and_connections(now)
@@ -111,6 +112,44 @@ class StatisticsEngine:
                 {"domain": domain, "count": count}
                 for domain, count in self.domain_counts.most_common(limit)
             ]
+            
+    def get_geo_points(self, limit: int = 100) -> list:
+        """
+        Returns combined source and destination geo-resolved IPs,
+        annotated with packet counts and direction.
+        Capped at limit entries, sorted by count descending.
+        """
+        with self._lock:
+            results = []
+
+            for ip, geo in self.geo_sources.items():
+                count = self.source_ip_counts.get(ip, 0)
+                results.append({
+                    "ip": ip,
+                    "country_code": geo.country_code,
+                    "country_name": geo.country_name,
+                    "city": geo.city,
+                    "latitude": geo.latitude,
+                    "longitude": geo.longitude,
+                    "count": count,
+                    "direction": "source",
+                })
+
+            for ip, geo in self.geo_destinations.items():
+                count = self.dest_ip_counts.get(ip, 0)
+                results.append({
+                    "ip": ip,
+                    "country_code": geo.country_code,
+                    "country_name": geo.country_name,
+                    "city": geo.city,
+                    "latitude": geo.latitude,
+                    "longitude": geo.longitude,
+                    "count": count,
+                    "direction": "destination",
+                })
+
+            results.sort(key=lambda x: x["count"], reverse=True)
+            return results[:limit]
 
     def get_protocol_distribution(self) -> Dict[str, Dict[str, Any]]:
         """Returns distribution count and percentage per protocol."""
@@ -186,7 +225,8 @@ class StatisticsEngine:
                 "top_destination_ips": top_dst,
                 "top_domains": top_dom,
                 "active_connections_count": len(self.active_connections),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
+                "geo_points": self.get_geo_points(limit=50)
             }
 
     def reset(self) -> None:
@@ -200,5 +240,8 @@ class StatisticsEngine:
             self.domain_counts.clear()
             self._packet_window.clear()
             self.active_connections.clear()
+            self.geo_sources.clear()
+            self.geo_destinations.clear()
+            
             logger.info("Statistics engine has been reset.")
 global_stats_engine = StatisticsEngine()

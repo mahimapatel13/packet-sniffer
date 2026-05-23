@@ -6,21 +6,80 @@ from typing import Optional, Dict
 from scapy.all import Packet, IP, IPv6, TCP, UDP, ICMP, ARP, DNS, Ether
 from domain.entities import TrafficRecord
 from core.logging import logger
+import threading
+
 
 class DNSResolver:
+    def __init__(self, max_workers: int = 10):
+        self._cache: Dict[str, str] = {}
+        self._pending_ips = set()
 
-    def __init__(self,max_workers:int=10):
-        self._cache={}
-        self._executor=ThreadPoolExecutor(
-            max_workers=max_workers
+        self._lock = threading.Lock()
+
+        self._executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="dns-resolver"
         )
-        self._pending_ips=set()
+
+    def get_domain(self, ip: str) -> Optional[str]:
+
+        with self._lock:
+            if ip in self._cache:
+                return self._cache[ip]
+
+        if (
+            ip.startswith("127.")
+            or ip.startswith("224.")
+            or ip.startswith("239.")
+            or ip == "0.0.0.0"
+        ):
+            return "localhost" if ip.startswith("127.") else None
+
+        should_resolve = False
+
+        with self._lock:
+            if ip not in self._pending_ips:
+                self._pending_ips.add(ip)
+                should_resolve = True
+
+        if should_resolve:
+            self._executor.submit(
+                self._resolve_ip_background,
+                ip
+            )
+
+        return None
+
+    def add_to_cache(self, ip: str, domain: str):
+
+        if domain.endswith("."):
+            domain = domain[:-1]
+
+        with self._lock:
+            self._cache[ip] = domain
+
+    def _resolve_ip_background(self, ip: str):
+        try:
+            name, _, _ = socket.gethostbyaddr(ip)
+
+            with self._lock:
+                self._cache[ip] = name
+
+        except Exception:
+
+            with self._lock:
+                self._cache[ip] = ip
+
+        finally:
+            with self._lock:
+                self._pending_ips.discard(ip)
 
     def shutdown(self):
         self._executor.shutdown(
             wait=False,
             cancel_futures=True
         )
+
 class PacketParser:
     def __init__(self):
         self.resolver = DNSResolver()

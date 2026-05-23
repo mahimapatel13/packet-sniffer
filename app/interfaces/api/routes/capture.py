@@ -5,15 +5,10 @@ from application.services import global_coordinator
 from core.logging import logger
 
 router = APIRouter(prefix="/capture", tags=["Capture Control"])
-
 @router.get("/interfaces", response_model=List[InterfaceDTO])
 async def get_interfaces():
-    """
-    Returns available dynamic network interfaces detected on the host system.
-    Compatible with Windows (Npcap) and Linux (libpcap/raw sockets).
-    """
     try:
-        ifaces = await global_coordinator.list_interfaces()
+        ifaces = global_coordinator.list_interfaces()
         return [
             InterfaceDTO(
                 name=i.name,
@@ -31,7 +26,58 @@ async def get_interfaces():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to query network interfaces: {str(e)}"
         )
+        
+@router.get("/interfaces/debug")
+async def debug_interfaces():
+    import psutil
+    from scapy.all import conf
+    
+    scapy_ifaces = []
+    try:
+        for k, v in conf.ifaces.items():
+            scapy_ifaces.append({
+                "key": str(k),
+                "name": getattr(v, "name", None),
+                "ip": str(getattr(v, "ip", None)),
+                "mac": getattr(v, "mac", None),
+            })
+    except Exception as e:
+        scapy_ifaces = [{"error": str(e)}]
 
+    psutil_ifaces = []
+    try:
+        addrs = psutil.net_if_addrs()
+        stats = psutil.net_if_stats()
+        for name, addr_list in addrs.items():
+            psutil_ifaces.append({
+                "name": name,
+                "is_up": stats[name].isup if name in stats else None,
+                "addrs": [{"family": str(a.family), "address": a.address} for a in addr_list]
+            })
+    except Exception as e:
+        psutil_ifaces = [{"error": str(e)}]
+
+    return {"scapy": scapy_ifaces, "psutil": psutil_ifaces}
+
+    try:
+        ifaces = global_coordinator.list_interfaces()
+        return [
+            InterfaceDTO(
+                name=i.name,
+                description=i.description,
+                ip_addresses=i.ip_addresses,
+                mac_address=i.mac_address,
+                is_loopback=i.is_loopback,
+                is_up=i.is_up
+            )
+            for i in ifaces
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching interfaces: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query network interfaces: {str(e)}"
+        )
 @router.post("/start", status_code=status.HTTP_200_OK)
 async def start_capture(payload: CaptureStartRequest):
     """

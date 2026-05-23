@@ -24,7 +24,7 @@ class TrafficRecord(BaseModel):
 class Alert(BaseModel):
     id: Optional[int] = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    severity: str  # "low", "medium", "high"
+    severity: str  # "CRITICAL", "WARNING", "INFO"
     message: str
     source_ip: Optional[str] = None
 

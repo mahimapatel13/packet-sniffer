@@ -25,6 +25,10 @@ class Settings(BaseSettings):
         default="redis://localhost:6379/0",
         validation_alias="REDIS_URL"
     )
+    GEOIP_DB_PATH: str = Field(
+        default="app/data/GeoLite2-City.mmdb",
+        validation_alias="GEOIP_DB_PATH"
+    )
 
     # Capture Settings
     BATCH_SIZE: int = 500

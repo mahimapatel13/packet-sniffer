@@ -71,3 +71,14 @@ class StatsSummaryDTO(BaseModel):
     top_domains: List[TopDomainItem]
     active_connections_count: int
     timestamp: str
+    geo_points: List[GeoPointDTO] = Field(default_factory=list)
+
+class GeoPointDTO(BaseModel):
+    ip: str
+    country_code: str
+    country_name: str
+    city: Optional[str] = None
+    latitude: float
+    longitude: float
+    count: int
+    direction: str  # "source" or "destination"

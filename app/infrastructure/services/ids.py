@@ -12,8 +12,10 @@ class IDSEngine:
     Provides rule-based heuristics for port scans, flooding, TCP SYN abuse, and spikes.
     """
     def __init__(self, alert_callback: Callable[[Alert], None]):
+        self._packet_count: int = 0
         self._lock = threading.Lock()
         self._alert_callback = alert_callback
+        
 
         # 1. Port Scan Tracking: (src_ip, dst_ip) -> [(timestamp, port)]
         self._port_scans = defaultdict(deque)
@@ -38,14 +40,13 @@ class IDSEngine:
         self._rate_limit_period = 30.0  # 30 seconds suppression per specific alert type/IP
 
     def detect(self, record: TrafficRecord) -> None:
-        """
-        Analyzes a network traffic record against security threat rules.
-        """
         now = time.time()
         with self._lock:
-            # Clean up ancient history periodically (every 100 packets processed)
-            self._cleanup_outdated_data(now)
-
+            # Cleanup every 100 packets to avoid O(n) on every packet
+            self._packet_count = getattr(self, '_packet_count', 0) + 1
+            if self._packet_count % 100 == 0:
+                self._cleanup_outdated_data(now)
+        
             # --- RULE 1: Global Bandwidth Traffic Spike ---
             self._traffic_history.append((now, record.packet_size))
             self._check_traffic_spikes(now)
@@ -139,7 +140,7 @@ class IDSEngine:
         unique_ports = {port for _, port in window}
         if len(unique_ports) >= settings.PORT_SCAN_THRESHOLD:
             self._trigger_alert(
-                severity="high",
+                severity="HIGH",
                 message=f"Possible port scanning detected: scanned {len(unique_ports)} unique ports on host {dst_ip}",
                 source_ip=src_ip,
                 alert_type="PORT_SCAN",
@@ -150,7 +151,7 @@ class IDSEngine:
         window = self._icmp_floods[src_ip]
         if len(window) >= settings.ICMP_FLOOD_THRESHOLD:
             self._trigger_alert(
-                severity="high",
+                severity="HIGH",
                 message=f"ICMP flood detected: {len(window)} pings/sec",
                 source_ip=src_ip,
                 alert_type="ICMP_FLOOD",
@@ -161,8 +162,8 @@ class IDSEngine:
         window = self._ip_packet_rates[src_ip]
         if len(window) >= settings.EXCESSIVE_REQUESTS_THRESHOLD:
             self._trigger_alert(
-                severity="medium",
-                message=f"Excessive requests: high packet rate ({len(window)} packets/sec)",
+                severity="WARNING",
+                message=f"Excessive requests: HIGH packet rate ({len(window)} packets/sec)",
                 source_ip=src_ip,
                 alert_type="EXCESSIVE_REQUESTS",
                 now=now
@@ -173,7 +174,7 @@ class IDSEngine:
         # > 50 SYN attempts in 10 seconds without payload (connection scanning or SYN flood)
         if len(window) >= 50:
             self._trigger_alert(
-                severity="medium",
+                severity="WARNING",
                 message=f"Suspicious TCP SYN activity detected: {len(window)} connection handshakes attempted in 10s",
                 source_ip=src_ip,
                 alert_type="SYN_FLOOD",
@@ -200,8 +201,8 @@ class IDSEngine:
             if now - self._last_spike_alert > self._rate_limit_period:
                 self._last_spike_alert = now
                 alert = Alert(
-                    severity="low",
-                    message=f"Suspicious traffic spike: current rate ({round(recent_rate/1024, 1)} KB/s) is {round(recent_rate/avg_rate, 1)}x higher than average baseline",
+                    severity="INFO",
+                    message=f"Suspicious traffic spike: current rate ({round(recent_rate/1024, 1)} KB/s) is {round(recent_rate/avg_rate, 1)}x HIGHer than average baseline",
                     source_ip=None
                 )
                 logger.warning(f"[IDS ALERT - LOW]: {alert.message}")

@@ -35,12 +35,30 @@ export function PacketLogs({ initial }: { initial: Packet[] }) {
   useEffect(() => setPackets(initial), [initial]);
 
   useEffect(() => {
-    const off = subscribeLivePackets((p) => {
-      setPackets((prev) => [p, ...prev].slice(0, 15));
-    });
-    return off;
-  }, []);
+    let cleanup: (() => void) | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let destroyed = false;
 
+    function connect() {
+      if (destroyed) return;
+      cleanup = subscribeLivePackets((p) => {
+        setPackets((prev) => [p, ...prev].slice(0, 500));
+      }, () => {
+        // onClose callback — reconnect after 3s
+        if (!destroyed) {
+          retryTimeout = setTimeout(connect, 3000);
+        }
+      });
+    }
+
+    connect();
+
+    return () => {
+      destroyed = true;
+      if (retryTimeout) clearTimeout(retryTimeout);
+      if (cleanup) cleanup();
+    };
+  }, []);
   const filtered = useMemo(() => {
     return packets.filter((p) => {
       if (proto !== "all" && p.protocol !== proto) return false;
@@ -164,18 +182,19 @@ export function PacketLogs({ initial }: { initial: Packet[] }) {
 }
 
 function StatusPill({ status }: { status: Packet["status"] }) {
-  const map = {
+  const map: Record<string, { c: string; t: string }> = {
     ok: { c: "var(--success)", t: "OK" },
     suspicious: { c: "var(--warning)", t: "Suspicious" },
     blocked: { c: "var(--destructive)", t: "Blocked" },
-  }[status];
+  };
+  const entry = map[status] ?? { c: "var(--muted-foreground)", t: status };
   return (
     <span
       className="inline-flex items-center gap-1.5 text-[11px] font-medium"
-      style={{ color: map.c }}
+      style={{ color: entry.c }}
     >
       <Circle className="h-2 w-2 fill-current" />
-      {map.t}
+      {entry.t}
     </span>
   );
 }

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from typing import List, Dict, Any
-from application.dtos import StatsSummaryDTO, AlertDTO, ProtocolStatItem, TopIPItem, TopDomainItem
+from application.dtos import StatsSummaryDTO, AlertDTO, ProtocolStatItem, TopIPItem, TopDomainItem, GeoPointDTO
 from application.services import global_coordinator
 from infrastructure.services.stats import global_stats_engine
 from core.logging import logger
@@ -96,6 +96,23 @@ async def get_top_domains(limit: int = Query(default=5, ge=1, le=50)):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to aggregate top requested domains: {str(e)}"
+        )
+        
+@router.get("/geo-points", response_model=List[GeoPointDTO])
+async def get_geo_points(limit: int = Query(default=100, ge=1, le=500)):
+    """
+    Returns geo-resolved source and destination IPs with coordinates,
+    country, city, packet counts, and direction.
+    Returns empty list if GeoLite2 database is not installed.
+    """
+    try:
+        data = global_stats_engine.get_geo_points(limit)
+        return [GeoPointDTO(**item) for item in data]
+    except Exception as e:
+        logger.error(f"Error fetching geo points: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch geo points: {str(e)}"
         )
         
 @router.get("/graph")

@@ -7,6 +7,7 @@ from core.logging import logger, setup_logging
 from infrastructure.database.session import init_db
 from application.services import global_coordinator, global_db_writer, global_capture_engine, global_stats_engine
 from interfaces.websockets.manager import WebSocketConnectionManager
+from infrastructure.services.geo import geo_resolver
 from interfaces.api.routes import capture, traffic, metrics
 
 # Ensure logging is established
@@ -29,9 +30,14 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down backend...")
+    sessions_snapshot = list(global_capture_engine._active_sessions.values())
 
+    
     # Stop all capture threads
     global_capture_engine.stop_all_sessions()
+
+    geo_resolver.shutdown()
+    logger.info("GeoIP resolver shut down.")
 
     # Flush DB queue
     await global_db_writer.stop()
@@ -52,7 +58,14 @@ app = FastAPI(
 # Configure CORS for multi-origin dashboard environments (React, Vue, Flutter, Angular, etc.)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:8080",
+        
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,43 +90,35 @@ async def health_check():
 @app.websocket("/ws/live-traffic")
 async def ws_live_traffic(websocket: WebSocket):
     await ws_manager.connect(websocket, "live-traffic")
-
     try:
         while True:
             await asyncio.sleep(1)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         ws_manager.disconnect(websocket, "live-traffic")
-
-
 
 @app.websocket("/ws/statistics")
 async def ws_statistics(websocket: WebSocket):
-    await ws_manager.connect(websocket,"statistics")
-
+    await ws_manager.connect(websocket, "statistics")
     try:
         while True:
-            stats = global_stats_engine.get_stats()
-
-            await websocket.send_json(stats)
-
             await asyncio.sleep(1)
-
-    except WebSocketDisconnect:
-        ws_manager.disconnect(websocket,"statistics")
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
+        ws_manager.disconnect(websocket, "statistics")
 
 @app.websocket("/ws/alerts")
 async def ws_alerts(websocket: WebSocket):
-    """Security alert stream endpoint, broadcasting IDS logs instantly as they trigger."""
     await ws_manager.connect(websocket, "alerts")
     try:
         while True:
             await asyncio.sleep(1)
-    except WebSocketDisconnect:
+    except (WebSocketDisconnect, Exception):
+        pass
+    finally:
         ws_manager.disconnect(websocket, "alerts")
-    except Exception as e:
-        logger.error(f"Error on alerts WebSocket: {e}")
-        ws_manager.disconnect(websocket, "alerts")
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

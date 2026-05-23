@@ -5,7 +5,8 @@ import {
   ProtocolStatItem, 
   StatsSummaryDTO, 
   TrafficRecordDTO,
-  SystemHealthDTO
+  SystemHealthDTO,
+  GeoPointDTO
 } from "./types";
 
 const BASE_URL = "http://localhost:8000";
@@ -43,39 +44,51 @@ export type Packet = {
 };
 
 // --- API Implementation ---
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`API error ${res.status}: ${errorText}`);
+  }
+  return res.json() as Promise<T>;
+}
 
 export async function getHealth(): Promise<SystemHealthDTO> {
-  const res = await fetch(`${BASE_URL}/`);
-  return res.json();
+  return apiFetch<SystemHealthDTO>(`${BASE_URL}/`);
 }
 
 export async function getInterfaces(): Promise<InterfaceDTO[]> {
-  const res = await fetch(`${BASE_URL}/capture/interfaces`);
-  return res.json();
+  return apiFetch<InterfaceDTO[]>(`${BASE_URL}/capture/interfaces`);
 }
 
 export async function startCapture(config: CaptureStartRequest): Promise<{ message: string; session_id: string; interface: string }> {
-  const res = await fetch(`${BASE_URL}/capture/start`, {
+  return apiFetch(`${BASE_URL}/capture/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
   });
-  return res.json();
 }
 
 export async function stopCapture(): Promise<{ message: string }> {
-  const res = await fetch(`${BASE_URL}/capture/stop`, { method: "POST" });
-  return res.json();
+  return apiFetch(`${BASE_URL}/capture/stop`, { method: "POST" });
 }
 
 export async function getStatistics(): Promise<StatsSummaryDTO> {
-  const res = await fetch(`${BASE_URL}/statistics`);
-  return res.json();
+  return apiFetch<StatsSummaryDTO>(`${BASE_URL}/statistics`);
 }
 
 export async function getProtocols(): Promise<Record<string, ProtocolStatItem>> {
-  const res = await fetch(`${BASE_URL}/protocols`);
-  return res.json();
+  return apiFetch<Record<string, ProtocolStatItem>>(`${BASE_URL}/protocols`);
+}
+
+
+
+export async function getAlerts(limit = 100): Promise<AlertDTO[]> {
+  return apiFetch<AlertDTO[]>(`${BASE_URL}/alerts?limit=${limit}`);
+}
+
+export async function getLiveTraffic(limit = 50): Promise<TrafficRecordDTO[]> {
+  return apiFetch<TrafficRecordDTO[]>(`${BASE_URL}/traffic/live?limit=${limit}`);
 }
 
 export async function getTopIps(limit = 5): Promise<{ sources: any[]; destinations: any[] }> {
@@ -88,24 +101,22 @@ export async function getTopDomains(limit = 5): Promise<any[]> {
   return res.json();
 }
 
-export async function getAlerts(limit = 100): Promise<AlertDTO[]> {
-  const res = await fetch(`${BASE_URL}/alerts?limit=${limit}`);
-  return res.json();
-}
-
-export async function getLiveTraffic(limit = 50): Promise<TrafficRecordDTO[]> {
-  const res = await fetch(`${BASE_URL}/traffic/live?limit=${limit}`);
-  return res.json();
+export async function getGeoPoints(limit = 100): Promise<GeoPointDTO[]> {
+  return apiFetch<GeoPointDTO[]>(`${BASE_URL}/geo-points?limit=${limit}`);
 }
 
 // ---- WebSocket Subscriptions ----
 
-function createWebSocket<T>(path: string, onMessage: (data: T) => void) {
+function createWebSocket<T>(
+  path: string,
+  onMessage: (data: T) => void,
+  onClose?: () => void
+) {
   const socket = new WebSocket(`${WS_BASE_URL}${path}`);
-  
+
   socket.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data) as T;
       onMessage(data);
     } catch (err) {
       console.error(`Error parsing WS message from ${path}:`, err);
@@ -116,14 +127,19 @@ function createWebSocket<T>(path: string, onMessage: (data: T) => void) {
     console.error(`WS error on ${path}:`, err);
   };
 
+  socket.onclose = () => {
+    onClose?.();
+  };
+
   return () => {
+    socket.onclose = null; // prevent reconnect on intentional close
     if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
       socket.close();
     }
   };
 }
 
-export function subscribeLivePackets(cb: (p: Packet) => void) {
+export function subscribeLivePackets(cb: (p: Packet) => void, onClose?: () => void) {
   return createWebSocket<TrafficRecordDTO>("/ws/live-traffic", (record) => {
     cb({
       id: `${record.timestamp}-${Math.random()}`,
@@ -134,9 +150,9 @@ export function subscribeLivePackets(cb: (p: Packet) => void) {
       size: record.packet_size,
       port: record.destination_port || 0,
       domain: record.domain || "",
-      status: "ok", // Backend doesn't provide status directly in live feed yet
+      status: "ok",
     });
-  });
+  }, onClose);
 }
 
 export function subscribeStatistics(cb: (stats: StatsSummaryDTO) => void) {
