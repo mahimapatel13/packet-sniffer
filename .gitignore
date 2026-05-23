@@ -1,3 +1,6 @@
+
+app/data/GeoLite2-City.mmdb
+app/data/*.mmdb
 # Byte-compiled / cache
 __pycache__/
 *.py[cod]
@@ -130,3 +133,5 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+.lovable

@@ -1,6 +1,13 @@
 import { motion } from "framer-motion";
-import { Activity, Play, Square, Settings, User, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  Activity,
+  Play,
+  Square,
+  Settings,
+  User,
+  RefreshCw,
+} from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 import { getHealth, startCapture, stopCapture } from "@/services/api";
 import { InterfaceDTO, SystemHealthDTO } from "@/services/types";
 import {
@@ -15,7 +22,11 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export function Navbar() {
-  const [health, setHealth] = useState<SystemHealthDTO | null>(null);
+  const [health, setHealth] = useState<SystemHealthDTO>({
+    status: "healthy",
+    project: "",
+    active_captures: []
+  });
   const [interfaces, setInterfaces] = useState<InterfaceDTO[]>([]);
   const [loadingIfaces, setLoadingIfaces] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -23,20 +34,60 @@ export function Navbar() {
 
   const fetchHealth = async () => {
     try {
-      const res = await fetch("http://localhost:8000/");
-      if (!res.ok) return;
-      const data: SystemHealthDTO = await res.json();
+      console.log("1 before fetch");
+
+      const res = await fetch("http://127.0.0.1:8000/");
+
+      console.log("2 after fetch", res.status);
+
+      const text = await res.text();
+
+      console.log("3 body:", text);
+
+      const data = JSON.parse(text);
+
+      console.log("4 parsed");
+
       setHealth(data);
+
+      console.log("5 state set");
     } catch (err) {
-      console.error("Failed to fetch health", err);
+      console.error("FAILED:", err);
     }
   };
 
+  // const intervalRef = useRef<number | null>(null);
+
   useEffect(() => {
-    fetchHealth();
-    const id = setInterval(fetchHealth, 5000);
-    return () => clearInterval(id);
-  }, []);
+      let mounted = true;
+
+      const load = async () => {
+        try {
+          console.log("before fetch");
+
+          const res = await fetch("http://127.0.0.1:8000/");
+
+          if (!mounted) return;
+
+          const data = await res.json();
+
+          if (!mounted) return;
+
+          setHealth(data);
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      load();
+
+      const id = window.setInterval(load, 5000);
+
+      return () => {
+        mounted = false;
+        clearInterval(id);
+      };
+    }, []);
 
   // Load interfaces whenever dialog opens
   useEffect(() => {
@@ -56,7 +107,9 @@ export function Navbar() {
         if (!cancelled) {
           setInterfaces(data);
           if (data.length === 0) {
-            toast.error("No interfaces found. Run backend with admin/root privileges.");
+            toast.error(
+              "No interfaces found. Run backend with admin/root privileges.",
+            );
           }
         }
       } catch (err: unknown) {
@@ -70,11 +123,18 @@ export function Navbar() {
     };
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
-  const isActive = health?.active_captures.some((c) => c.is_active) ?? false;
-  const activeInterface = health?.active_captures.find((c) => c.is_active)?.interface;
+  const isActive = health?.active_captures?.some((c) => c.is_active) ?? false;
+
+  const activeInterface = health?.active_captures?.find(
+    (c) => c.is_active,
+  )?.interface;
+  // const isActive = health?.active_captures.some((c) => c.is_active) ?? false;
+  // const activeInterface = health?.active_captures.find((c) => c.is_active)?.interface;
 
   const handleStart = async (iface: string) => {
     setActionLoading(true);
@@ -102,7 +162,9 @@ export function Navbar() {
   const handleStop = async () => {
     setActionLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/capture/stop", { method: "POST" });
+      const res = await fetch("http://localhost:8000/capture/stop", {
+        method: "POST",
+      });
       if (!res.ok) throw new Error(`${res.status}`);
       toast.success("Stopped all captures");
       fetchHealth();
@@ -125,11 +187,16 @@ export function Navbar() {
         <div className="flex items-center gap-3">
           <div className="relative flex h-9 w-9 items-center justify-center rounded-xl glass-panel">
             <div className="absolute inset-0 rounded-xl bg-primary/20 blur-xl" />
-            <Activity className="relative h-4 w-4 text-primary" strokeWidth={2.5} />
+            <Activity
+              className="relative h-4 w-4 text-primary"
+              strokeWidth={2.5}
+            />
           </div>
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold tracking-tight">Strata</span>
-            <span className="text-[11px] text-muted-foreground">Network Traffic Analyzer</span>
+            <span className="text-[11px] text-muted-foreground">
+              Network Traffic Analyzer
+            </span>
           </div>
         </div>
 
@@ -143,8 +210,12 @@ export function Navbar() {
                 className={`relative inline-flex h-2 w-2 rounded-full ${isActive ? "bg-success" : "bg-muted"}`}
               />
             </span>
-            <span className="text-foreground/80">{isActive ? "Live" : "Idle"}</span>
-            <span>· {isActive ? `Monitoring ${activeInterface}` : "System Ready"}</span>
+            <span className="text-foreground/80">
+              {isActive ? "Live" : "Idle"}
+            </span>
+            <span>
+              · {isActive ? `Monitoring ${activeInterface}` : "System Ready"}
+            </span>
           </div>
 
           {isActive ? (
@@ -187,7 +258,10 @@ export function Navbar() {
                       No interfaces found.{" "}
                       <button
                         className="underline hover:text-foreground"
-                        onClick={() => { setOpen(false); setTimeout(() => setOpen(true), 0); }}
+                        onClick={() => {
+                          setOpen(false);
+                          setTimeout(() => setOpen(true), 0);
+                        }}
                       >
                         Retry
                       </button>
@@ -201,7 +275,9 @@ export function Navbar() {
                         className="flex flex-col items-start gap-1 rounded-xl border border-border/60 bg-card/40 p-4 text-left transition hover:border-primary/40 hover:bg-primary/5 disabled:opacity-50"
                       >
                         <div className="flex w-full items-center justify-between">
-                          <span className="font-semibold text-foreground">{iface.name}</span>
+                          <span className="font-semibold text-foreground">
+                            {iface.name}
+                          </span>
                           <span
                             className={`text-[10px] rounded-full px-2 py-0.5 ${
                               iface.is_up
@@ -217,7 +293,10 @@ export function Navbar() {
                         </span>
                         <div className="mt-1 flex flex-wrap gap-2">
                           {iface.ip_addresses.map((ip) => (
-                            <span key={ip} className="text-[10px] font-mono text-muted-foreground/70">
+                            <span
+                              key={ip}
+                              className="text-[10px] font-mono text-muted-foreground/70"
+                            >
                               {ip}
                             </span>
                           ))}

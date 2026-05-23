@@ -1,8 +1,8 @@
 import time
 from datetime import datetime
-from infrastructure.services.ids import IDSEngine
-from domain.entities import TrafficRecord, Alert
-from core.config import settings
+from app.infrastructure.services.ids import IDSEngine
+from app.domain.entities import TrafficRecord, Alert
+from app.core.config import settings
 
 def test_ids_icmp_flood():
     alerts_triggered = []

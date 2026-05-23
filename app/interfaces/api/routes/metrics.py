@@ -98,26 +98,37 @@ async def get_top_domains(limit: int = Query(default=5, ge=1, le=50)):
             detail=f"Failed to aggregate top requested domains: {str(e)}"
         )
         
-@router.get("/geo-points", response_model=List[GeoPointDTO])
-async def get_geo_points(limit: int = Query(default=100, ge=1, le=500)):
-    """
-    Returns geo-resolved source and destination IPs with coordinates,
-    country, city, packet counts, and direction.
-    Returns empty list if GeoLite2 database is not installed.
-    """
-    try:
-        data = global_stats_engine.get_geo_points(limit)
-        return [GeoPointDTO(**item) for item in data]
-    except Exception as e:
-        logger.error(f"Error fetching geo points: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch geo points: {str(e)}"
-        )
-        
+# @router.get("/geo-points", response_model=List[GeoPointDTO])
+# async def get_geo_points(limit: int = Query(default=100, ge=1, le=500)):
+#     """
+#     Returns geo-resolved source and destination IPs with coordinates,
+#     country, city, packet counts, and direction.
+#     Returns empty list if GeoLite2 database is not installed.
+#     """
+#     try:
+#         logger.info("GEO START")
+
+#         data = global_stats_engine.get_geo_points(limit)
+
+#         logger.info("GEO END")
+#         return [GeoPointDTO(**item) for item in data]
+#     except Exception as e:
+#         logger.error(f"Error fetching geo points: {e}")
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"Failed to fetch geo points: {str(e)}"
+#         )
+@router.get("/geo-points")
+async def get_geo_points(limit: int = 100):
+    return []
+      
 @router.get("/graph")
 async def get_graph():
+    logger.info("GRAPH START")
+
     stats = global_stats_engine.get_stats()
+
+    logger.info("GRAPH END")
 
     nodes = [
         {

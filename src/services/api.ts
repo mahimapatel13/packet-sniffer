@@ -9,8 +9,8 @@ import {
   GeoPointDTO
 } from "./types";
 
-const BASE_URL = "http://localhost:8000";
-const WS_BASE_URL = "ws://localhost:8000";
+const BASE_URL = "http://127.0.0.1:8000";
+const WS_BASE_URL = "ws://127.0.0.1:8000";
 
 // --- Existing Types (kept for compatibility where possible) ---
 export type Statistics = {
@@ -44,13 +44,37 @@ export type Packet = {
 };
 
 // --- API Implementation ---
-async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`API error ${res.status}: ${errorText}`);
+async function apiFetch<T>(
+  url: string,
+  options?: RequestInit
+): Promise<T> {
+
+  const controller = new AbortController();
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    5000
+  );
+
+  try {
+    const res = await fetch(url,{
+      ...options,
+      signal: controller.signal
+    });
+
+    if (!res.ok) {
+      const errorText = await res.text();
+
+      throw new Error(
+        `API error ${res.status}: ${errorText}`
+      );
+    }
+
+    return await res.json();
+
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json() as Promise<T>;
 }
 
 export async function getHealth(): Promise<SystemHealthDTO> {

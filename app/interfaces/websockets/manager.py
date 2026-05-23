@@ -28,6 +28,7 @@ class WebSocketConnectionManager:
         self._stats_task: Optional[asyncio.Task] = None
 
     async def connect(self, websocket: WebSocket, channel: str):
+        print(f"CONNECT {channel} ")
         await websocket.accept()
         self._loop = asyncio.get_running_loop()
         if channel == "live-traffic":
@@ -43,6 +44,7 @@ class WebSocketConnectionManager:
             logger.info(f"Client connected to /ws/alerts. Total: {len(self.alerts_clients)}")
 
     def disconnect(self, websocket: WebSocket, channel: str):
+        print(f"DISCONNECT {channel}")
         if channel == "live-traffic":
             self.live_traffic_clients.discard(websocket)
             logger.info(f"Client disconnected from /ws/live-traffic. Total: {len(self.live_traffic_clients)}")

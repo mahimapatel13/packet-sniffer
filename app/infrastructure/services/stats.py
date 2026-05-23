@@ -13,7 +13,7 @@ class StatisticsEngine:
     Operates with sliding windows for real-time traffic rate estimates.
     """
     def __init__(self, window_size_sec: float = 10.0):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._window_size_sec = window_size_sec
 
         # Core Accumulators
@@ -192,8 +192,10 @@ class StatisticsEngine:
         """
         Compiles a comprehensive summary of all tracked real-time statistics.
         """
+        logger.info("GET_STATS ENTER")
         now = time.time()
         with self._lock:
+            logger.info("GET_STATS LOCKED")
             self._cleanup_window_and_connections(now)
             
             # Protocols
@@ -215,6 +217,7 @@ class StatisticsEngine:
             bytes_sec = round(total_window_bytes / self._window_size_sec, 2)
             packets_sec = round(len(self._packet_window) / self._window_size_sec, 2)
 
+            logger.info("GET_STATS EXIT")
             return {
                 "total_packets": self.total_packets,
                 "total_bytes": self.total_bytes,

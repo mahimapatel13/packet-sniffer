@@ -39,16 +39,42 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const statsQuery = useQuery({ queryKey: ["statistics"], queryFn: getStatistics });
-  const protocolsQuery = useQuery({ queryKey: ["protocols"], queryFn: getProtocols });
+  const statsQuery = useQuery({ queryKey: ["statistics"], queryFn: getStatistics,
+  staleTime: 5000,
+  refetchInterval:52000,
+  refetchOnWindowFocus: false,
+  retry: false,});
+  const protocolsQuery = useQuery({ queryKey: ["protocols"], queryFn: getProtocols ,
+  staleTime: 5000,
+  refetchInterval: 5000,
+  refetchOnWindowFocus: false,
+  retry: false,
+});
   const ipsQuery = useQuery({ queryKey: ["top-ips"], queryFn: () => getTopIps() });
-  const alertsQuery = useQuery({ queryKey: ["alerts"], queryFn: () => getAlerts() });
-  const graphQuery = useQuery({ queryKey: ["graph"], queryFn: getGraph });
-  const packetsQuery = useQuery({ queryKey: ["packets"], queryFn: getLivePackets });
+  const alertsQuery = useQuery({ queryKey: ["alerts"], queryFn: () => getAlerts() ,
+  staleTime: 5000,
+  refetchInterval: 15000,
+  refetchOnWindowFocus: false,
+  retry: false,
+});
+  const graphQuery = useQuery({ queryKey: ["graph"], queryFn: getGraph,
+  staleTime: 5000,
+  refetchInterval: 10000,
+  refetchOnWindowFocus: false,
+  retry: false,
+ });
+  const packetsQuery = useQuery({ queryKey: ["packets"], queryFn: getLivePackets ,
+  enabled:false,
+});
   const geoQuery = useQuery({
     queryKey: ['geo-points'],
     queryFn: () => getGeoPoints(100),
-    refetchInterval: 10_000,
+
+  staleTime: 5000,
+  refetchInterval: 15000,
+  refetchOnWindowFocus: false,
+  retry: false,
+
   });
 
   const [liveStats, setLiveStats] = useState<StatsSummaryDTO | null>(null);

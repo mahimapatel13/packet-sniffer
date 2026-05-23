@@ -75,50 +75,83 @@ app.add_middleware(
 app.include_router(capture.router)
 app.include_router(traffic.router)
 app.include_router(metrics.router)
+@app.middleware("http")
+async def debug_requests(request, call_next):
+    logger.info(f"REQUEST START {request.url.path}")
+
+    response = await call_next(request)
+
+    logger.info(
+        f"REQUEST END {request.url.path} status={response.status_code}"
+    )
+
+    return response
 
 # Health Check Route
+# @app.get("/")
+# async def health_check():
+#     return {
+#         "status": "healthy"
+#     }
 @app.get("/")
 async def health_check():
     active_sessions = global_capture_engine.get_active_sessions()
     return {
         "status": "healthy",
         "project": settings.PROJECT_NAME,
-        "active_captures": active_sessions
+        "active_captures": []
     }
 
 # --- WebSocket Channel Endpoints ---
 @app.websocket("/ws/live-traffic")
 async def ws_live_traffic(websocket: WebSocket):
+    logger.info( f"CONNECT live-traffic ip={websocket.client.host}:{websocket.client.port}")
+    
     await ws_manager.connect(websocket, "live-traffic")
+
     try:
         while True:
-            await asyncio.sleep(1)
-    except (WebSocketDisconnect, Exception):
-        pass
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+            logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"WS error: {e}")
+        
     finally:
         ws_manager.disconnect(websocket, "live-traffic")
 
 @app.websocket("/ws/statistics")
 async def ws_statistics(websocket: WebSocket):
+    logger.info( f"CONNECT stats ip={websocket.client.host}:{websocket.client.port}")
+    
     await ws_manager.connect(websocket, "statistics")
+
     try:
         while True:
-            await asyncio.sleep(1)
-    except (WebSocketDisconnect, Exception):
-        pass
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+            logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"WS error: {e}")
+        
     finally:
         ws_manager.disconnect(websocket, "statistics")
 
 @app.websocket("/ws/alerts")
 async def ws_alerts(websocket: WebSocket):
+    logger.info( f"CONNECT alerts ip={websocket.client.host}:{websocket.client.port}")
     await ws_manager.connect(websocket, "alerts")
+
     try:
         while True:
-            await asyncio.sleep(1)
-    except (WebSocketDisconnect, Exception):
-        pass
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+            logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"WS error: {e}")
+        
     finally:
         ws_manager.disconnect(websocket, "alerts")
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=False)
