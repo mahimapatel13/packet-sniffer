@@ -1,10 +1,10 @@
 import asyncio
 from typing import List, Optional
-from domain.entities import TrafficRecord
-from infrastructure.database.session import async_session_factory
-from infrastructure.database.repositories import TrafficRepository
-from core.logging import logger
-from core.config import settings
+from app.domain.entities import TrafficRecord
+from app.infrastructure.database.session import async_session_factory
+from app.infrastructure.database.repositories import TrafficRepository
+from app.core.logging import logger
+from app.core.config import settings
 
 class BatchDatabaseWriter:
     """

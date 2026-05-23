@@ -2,9 +2,9 @@ import time
 import threading
 from collections import deque, defaultdict
 from typing import Dict, Set, List, Optional, Callable
-from domain.entities import TrafficRecord, Alert
-from core.config import settings
-from core.logging import logger
+from app.domain.entities import TrafficRecord, Alert
+from app.core.config import settings
+from app.core.logging import logger
 
 class IDSEngine:
     """

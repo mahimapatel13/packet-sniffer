@@ -2,13 +2,13 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from core.config import settings
-from core.logging import logger, setup_logging
-from infrastructure.database.session import init_db
-from application.services import global_coordinator, global_db_writer, global_capture_engine, global_stats_engine
-from interfaces.websockets.manager import WebSocketConnectionManager
-from infrastructure.services.geo import geo_resolver
-from interfaces.api.routes import capture, traffic, metrics
+from app.core.config import settings
+from app.core.logging import logger, setup_logging
+from app.infrastructure.database.session import init_db
+from app.application.services import global_coordinator, global_db_writer, global_capture_engine, global_stats_engine
+from app.interfaces.websockets.manager import WebSocketConnectionManager
+from app.infrastructure.services.geo import geo_resolver
+from app.interfaces.api.routes import capture, traffic, metrics
 
 # Ensure logging is established
 setup_logging()

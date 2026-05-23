@@ -3,15 +3,21 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from scapy.config import conf
-from domain.entities import TrafficRecord, Alert, Session, InterfaceInfo
-from domain.interfaces import ITrafficRepository, IAlertRepository, ISessionRepository
-from infrastructure.capture.engine import CaptureEngine
-from infrastructure.services.stats import global_stats_engine, StatisticsEngine
-from infrastructure.services.db_writer import BatchDatabaseWriter
-from infrastructure.services.ids import IDSEngine
-from infrastructure.database.session import async_session_factory
-from infrastructure.database.repositories import TrafficRepository, AlertRepository, SessionRepository
-from core.logging import logger
+from app.domain.entities import TrafficRecord, Alert, Session, InterfaceInfo
+from app.domain.interfaces import ITrafficRepository, IAlertRepository, ISessionRepository
+from app.infrastructure.capture.engine import CaptureEngine
+from app.infrastructure.services.stats import global_stats_engine, StatisticsEngine
+from app.infrastructure.services.db_writer import BatchDatabaseWriter
+from app.infrastructure.services.ids import IDSEngine
+from app.infrastructure.database.session import async_session_factory
+from app.infrastructure.database.repositories import TrafficRepository, AlertRepository, SessionRepository
+from app.core.logging import logger
+
+import psutil
+import socket
+from typing import List
+from app.domain.entities import InterfaceInfo
+
 
 class TrafficCoordinator:
     """
@@ -72,7 +78,7 @@ class TrafficCoordinator:
         """Resets any active sessions left over in the database from a crash or abrupt termination."""
         try:
             from sqlalchemy import update
-            from infrastructure.database.models import SessionModel
+            from app.infrastructure.database.models import SessionModel
             async with async_session_factory() as db:
                 stmt = (
                     update(SessionModel)
@@ -86,6 +92,47 @@ class TrafficCoordinator:
             logger.error(f"Failed to cleanup stale sessions: {e}")
     
     def list_interfaces(self) -> List[InterfaceInfo]:
+        interfaces = []
+
+        try:
+            addrs = psutil.net_if_addrs()
+            stats = psutil.net_if_stats()
+
+            for name, addr_list in addrs.items():
+                ips = []
+                mac = None
+
+                for addr in addr_list:
+                    if addr.family == socket.AF_INET:
+                        ips.append(addr.address)
+
+                    elif addr.family == socket.AF_INET6:
+                        ips.append(addr.address.split("%")[0])
+
+                    elif str(addr.family) in ("-1", "17", "23"):
+                        mac = addr.address
+
+                iface_stat = stats.get(name)
+
+                interfaces.append(
+                    InterfaceInfo(
+                        name=name,
+                        description=name,
+                        ip_addresses=ips,
+                        mac_address=mac,
+                        is_loopback=(
+                            name.lower() == "lo"
+                            or "loop" in name.lower()
+                            or any(ip.startswith("127.") for ip in ips)
+                        ),
+                        is_up=iface_stat.isup if iface_stat else True
+                    )
+                )
+
+        except Exception as e:
+            logger.error(f"Interface detection failed: {e}")
+
+        return interfaces
         interfaces: List[InterfaceInfo] = []
         seen_names: set = set()
 

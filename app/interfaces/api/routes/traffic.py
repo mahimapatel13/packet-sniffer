@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query, HTTPException, status
-from application.dtos import PagedTrafficHistory, TrafficRecordDTO
-from application.services import global_coordinator
-from core.logging import logger
+from app.application.dtos import PagedTrafficHistory, TrafficRecordDTO
+from app.application.services import global_coordinator
+from app.core.logging import logger
 from typing import List
 
 router = APIRouter(prefix="/traffic", tags=["Traffic Log"])

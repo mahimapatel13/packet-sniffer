@@ -2,10 +2,9 @@ import threading
 from typing import Optional, Dict
 from pathlib import Path
 from pydantic import BaseModel
-from core.config import settings
-from core.logging import logger
+from app.core.config import settings
+from app.core.logging import logger
 import geoip2.database
-import geoip2.errors
 
 
 class GeoLocation(BaseModel):

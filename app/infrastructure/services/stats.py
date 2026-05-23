@@ -3,9 +3,9 @@ import threading
 from datetime import datetime
 from collections import Counter, deque
 from typing import Dict, Any, List, Tuple
-from domain.entities import TrafficRecord
-from core.logging import logger
-from infrastructure.services.geo import geo_resolver, GeoLocation
+from app.domain.entities import TrafficRecord
+from app.core.logging import logger
+from app.infrastructure.services.geo import geo_resolver, GeoLocation
 
 class StatisticsEngine:
     """

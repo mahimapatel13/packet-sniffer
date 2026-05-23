@@ -4,8 +4,8 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional, Dict
 from scapy.all import Packet, IP, IPv6, TCP, UDP, ICMP, ARP, DNS, Ether
-from domain.entities import TrafficRecord
-from core.logging import logger
+from app.domain.entities import TrafficRecord
+from app.core.logging import logger
 import threading
 
 

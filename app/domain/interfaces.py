@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional
-from domain.entities import TrafficRecord, Alert, Session
+from app.domain.entities import TrafficRecord, Alert, Session
 
 class ITrafficRepository(ABC):
     @abstractmethod

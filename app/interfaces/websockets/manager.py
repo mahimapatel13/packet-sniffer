@@ -3,10 +3,10 @@ import json
 import asyncio
 from typing import Set, Optional, Any
 from fastapi import WebSocket
-from domain.entities import TrafficRecord, Alert
-from core.config import settings
-from core.logging import logger
-from infrastructure.services.stats import global_stats_engine
+from app.domain.entities import TrafficRecord, Alert
+from app.core.config import settings
+from app.core.logging import logger
+from app.infrastructure.services.stats import global_stats_engine
 
 class WebSocketConnectionManager:
     """

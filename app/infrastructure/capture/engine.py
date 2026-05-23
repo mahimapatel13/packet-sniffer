@@ -4,9 +4,9 @@ import uuid
 import time
 from typing import Dict, List, Callable, Optional
 from scapy.all import conf, sniff
-from domain.entities import InterfaceInfo, TrafficRecord
-from core.logging import logger
-from infrastructure.capture.parser import PacketParser
+from app.domain.entities import InterfaceInfo, TrafficRecord
+from app.core.logging import logger
+from app.infrastructure.capture.parser import PacketParser
 
 def resolve_interface(interface_name: str):
     """
@@ -88,61 +88,6 @@ class CaptureEngine:
     def __init__(self):
         self._active_sessions: Dict[str, CaptureSessionThread] = {}
         self._lock = threading.Lock()
-
-    def list_interfaces(self) -> List[InterfaceInfo]:
-        """
-        Dynamically detects physical and virtual interfaces using Scapy's underlying architecture.
-        """
-        interfaces: List[InterfaceInfo] = []
-        try:
-            # conf.ifaces lists all detected system interfaces
-            for iface_key, iface in conf.ifaces.items():
-                name = iface.name
-                description = getattr(iface, "description", None) or getattr(iface, "mac", None) or name
-                mac = getattr(iface, "mac", None)
-                
-                # Extract IPs safely
-                ips = []
-                if getattr(iface, "ip", None):
-                    ips.append(str(iface.ip))
-                if hasattr(iface, "ips") and iface.ips:
-                    for family, ip_list in iface.ips.items():
-                        for ip in ip_list:
-                            ip_str = str(ip)
-                            if ip_str not in ips:
-                                ips.append(ip_str)
-
-                # Determine if loopback
-                is_loopback = False
-                if "loop" in name.lower() or name.lower() == "lo" or any(isinstance(ip, str) and ip.startswith("127.") for ip in ips):
-                    is_loopback = True
-
-                interfaces.append(InterfaceInfo(
-                    name=name,
-                    description=description,
-                    ip_addresses=ips,
-                    mac_address=mac,
-                    is_loopback=is_loopback,
-                    is_up=True
-                ))
-        except Exception as e:
-            logger.error(f"Error listing network interfaces: {e}")
-            
-            # Simple fallback using socket
-            try:
-                hostname = socket.gethostname()
-                ips = [socket.gethostbyname(hostname)]
-                interfaces.append(InterfaceInfo(
-                    name="default",
-                    description="Default Socket Interface",
-                    ip_addresses=ips,
-                    is_loopback=False,
-                    is_up=True
-                ))
-            except Exception:
-                pass
-
-        return interfaces
 
     def start_session(self, interface: str, packet_callback: Callable[[TrafficRecord], None]) -> str:
         """

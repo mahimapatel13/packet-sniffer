@@ -1,8 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List
-from application.dtos import CaptureStartRequest, InterfaceDTO
-from application.services import global_coordinator
-from core.logging import logger
+from app.application.dtos import CaptureStartRequest, InterfaceDTO
+from app.application.services import global_coordinator
+from app.core.logging import logger
 
 router = APIRouter(prefix="/capture", tags=["Capture Control"])
 @router.get("/interfaces", response_model=List[InterfaceDTO])

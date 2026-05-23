@@ -1,9 +1,9 @@
 import os
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from core.config import settings
-from core.logging import logger
-from infrastructure.database.models import Base
+from app.core.config import settings
+from app.core.logging import logger
+from app.infrastructure.database.models import Base
 
 # Cleanly format database URLs for async drivers if standard sync ones are supplied
 db_url = settings.DATABASE_URL
@@ -40,7 +40,7 @@ async def init_db() -> None:
     try:
         async with engine.begin() as conn:
             # Import models to ensure registered on Base
-            from infrastructure.database.models import TrafficRecordModel, AlertModel, SessionModel
+            from app.infrastructure.database.models import TrafficRecordModel, AlertModel, SessionModel
             await conn.run_sync(Base.metadata.create_all)
         logger.info("Database schemas initialized successfully.")
     except Exception as e:

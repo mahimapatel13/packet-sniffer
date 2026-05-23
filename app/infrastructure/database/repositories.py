@@ -2,9 +2,9 @@ from typing import List, Optional
 from datetime import datetime
 from sqlalchemy import select, desc, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from domain.entities import TrafficRecord, Alert, Session
-from domain.interfaces import ITrafficRepository, IAlertRepository, ISessionRepository
-from infrastructure.database.models import TrafficRecordModel, AlertModel, SessionModel
+from app.domain.entities import TrafficRecord, Alert, Session
+from app.domain.interfaces import ITrafficRepository, IAlertRepository, ISessionRepository
+from app.infrastructure.database.models import TrafficRecordModel, AlertModel, SessionModel
 
 class TrafficRepository(ITrafficRepository):
     def __init__(self, session: AsyncSession):
